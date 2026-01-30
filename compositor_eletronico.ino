@@ -1,3 +1,26 @@
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+typedef struct no {
+  int dado;
+  struct no *prox;
+} No;
+
+typedef struct musica{
+  No *inicio;
+  int bpm;
+  int tam;
+} Musica;
+
+//============= prototipos ==============
+
+void desenharNota(int cont, int nota);
+int notaParaY(int nota);
+void drawPentagrama();
+void CriarMusica(Musica *mu);
+// ===================== DEFINES DE NOTAS =====================
+
 // 4ª oitava
 #define NOTE_C4   262
 #define NOTE_CS4  277
@@ -11,7 +34,6 @@
 #define NOTE_A4   440
 #define NOTE_AS4  466
 #define NOTE_B4   494
-
 // 5ª oitava
 #define NOTE_C5   523
 #define NOTE_CS5  554
@@ -25,57 +47,212 @@
 #define NOTE_A5   880
 #define NOTE_AS5  932
 #define NOTE_B5   988
-
 // 6ª oitava
 #define NOTE_C6   1047
 
+#define REST 0
 
-#define REST      0
+// ===================== PINOS =====================
+
 #define UP     D6
 #define DOWN   D7
 #define OK     D8
 #define BACK   D3
 #define BUZZER D5
+
+// ===================== PARTITURA =====================
+
 #define STAFF_TOP 20
 #define STAFF_SPACING 6
+#define NOTE_STEP (STAFF_SPACING / 2)
 
-#include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
+#define NOTA_W 8
+#define NOTA_H 12
+#define NOTA_CENTRO_Y 6   // ajuste fino do bitmap
+
+// ===================== DISPLAY =====================
 
 Adafruit_SSD1306 display(128, 64, &Wire, -1);
+
+// ===================== ARRAYS =====================
+
+int frequencias[] = {
+  NOTE_C4, NOTE_CS4, NOTE_D4, NOTE_DS4, NOTE_E4, NOTE_F4,
+  NOTE_FS4, NOTE_G4, NOTE_GS4, NOTE_A4, NOTE_AS4, NOTE_B4,
+  NOTE_C5, NOTE_CS5, NOTE_D5, NOTE_DS5, NOTE_E5, NOTE_F5,
+  NOTE_FS5, NOTE_G5, NOTE_GS5, NOTE_A5, NOTE_AS5, NOTE_B5,
+  NOTE_C6
+};
+
+const char *nomeNotas[] = {
+  "NOTE_C4","NOTE_CS4","NOTE_D4","NOTE_DS4","NOTE_E4","NOTE_F4",
+  "NOTE_FS4","NOTE_G4","NOTE_GS4","NOTE_A4","NOTE_AS4","NOTE_B4",
+  "NOTE_C5","NOTE_CS5","NOTE_D5","NOTE_DS5","NOTE_E5","NOTE_F5",
+  "NOTE_FS5","NOTE_G5","NOTE_GS5","NOTE_A5","NOTE_AS5","NOTE_B5",
+  "NOTE_C6"
+};
+
+#define TOTAL_NOTAS (sizeof(frequencias) / sizeof(int))
+
+// ===================== BITMAP DA NOTA =====================
+
+#define NOTA_W 8
+#define NOTA_H 8
+
+const uint8_t bitmapNota[] PROGMEM = {
+  0b00000000,
+  0b00000000,
+  0b01111000,
+  0b11111100,
+  0b11111100,
+  0b01111000,
+  0b00000000,
+  0b00000000,
+};
+
+const uint8_t bitmapNotaSus[] PROGMEM = {
+  0b00000000,
+  0b00000000,
+  0b01111000,
+  0b11111100,
+  0b11111100,
+  0b01111001,
+  0b00010110,
+  0b00100100,
+};
+
+#define CLAVE_W 24
+#define CLAVE_H 44
+
+const unsigned char epd_bitmap_clave_pixel [] PROGMEM = {
+  0x00, 0x03, 0x00, 0x00, 0x07, 0x80, 0x00, 0x07, 0x80, 0x00, 0x0F, 0x80,
+  0x00, 0x0F, 0xC0, 0x00, 0x1C, 0xC0, 0x00, 0x1C, 0xC0, 0x00, 0x18, 0xC0,
+  0x00, 0x18, 0xC0, 0x00, 0x19, 0xC0, 0x00, 0x13, 0x80, 0x00, 0x07, 0x80,
+  0x00, 0x0F, 0x80, 0x00, 0x1F, 0x00, 0x00, 0x3F, 0x00, 0x00, 0x7E, 0x00,
+  0x00, 0xFC, 0x00, 0x01, 0xF8, 0x00, 0x03, 0xF8, 0x00, 0x03, 0xCC, 0x00,
+  0x07, 0x8E, 0x00, 0x07, 0x1F, 0x80, 0x0F, 0x3F, 0xC0, 0x0E, 0x7F, 0xE0,
+  0x0E, 0x7F, 0xE0, 0x0E, 0x7E, 0xF0, 0x06, 0x76, 0x70, 0x06, 0x76, 0x70,
+  0x06, 0x76, 0x70, 0x03, 0x36, 0xE0, 0x03, 0x87, 0xE0, 0x01, 0xC7, 0xC0,
+  0x00, 0x7F, 0x00, 0x00, 0x07, 0x00, 0x00, 0x03, 0x00, 0x00, 0x03, 0x00,
+  0x00, 0x03, 0xF3, 0x00, 0x01, 0xF9, 0x00, 0x01, 0xF9, 0x00, 0x01, 0xFF,
+  0x00, 0x01, 0xFF, 0x00, 0x00, 0xFE, 0x00, 0x00, 0x7C, 0x00, 0x00, 0x00,
+  0x00
+};
+
+
+
+
+// ===================== FUNÇÕES =====================
+
+bool ehSustenido(int nota) {
+  return (
+    nota == NOTE_CS4 || nota == NOTE_DS4 ||
+    nota == NOTE_FS4 || nota == NOTE_GS4 || nota == NOTE_AS4 ||
+    nota == NOTE_CS5 || nota == NOTE_DS5 ||
+    nota == NOTE_FS5 || nota == NOTE_GS5 || nota == NOTE_AS5
+  );
+}
+
+int notaParaY(int nota) {
+  int baseY = STAFF_TOP + STAFF_SPACING * 4;
+
+  switch (nota) {
+        // 4ª oitava
+    case NOTE_C4:  return 50;
+    case NOTE_CS4: return 50;
+    case NOTE_D4:  return 47;
+    case NOTE_DS4: return 47;
+    case NOTE_E4:  return 44;
+    case NOTE_F4:  return 41;
+    case NOTE_FS4: return 41;
+    case NOTE_G4:  return 38;
+    case NOTE_GS4: return 38;
+    case NOTE_A4:  return 35;
+    case NOTE_AS4: return 35;
+    case NOTE_B4:  return 32;
+    // 5ª oitava
+    case NOTE_C5:  return 29;
+    case NOTE_CS5: return 29;
+    case NOTE_D5:  return 26;
+    case NOTE_DS5: return 26;
+    case NOTE_E5:  return 23;
+    case NOTE_F5:  return 20;
+    case NOTE_FS5: return 20;
+    case NOTE_G5:  return 17;
+    case NOTE_GS5: return 17;
+    case NOTE_A5:  return 14;
+    case NOTE_AS5: return 14;
+    case NOTE_B5:  return 11;
+    // 6ª oitava
+    case NOTE_C6:  return 8;
+  }
+  return baseY;
+}
+
+void linhaSuplementar(int x, int y) {
+  display.drawLine(x - 4, y, x + 12, y, WHITE);
+}
+
+void desenharNota(int cont, int nota) {
+  int x = (cont * 2) + 55;
+  int y = notaParaY(nota);
+
+  if (ehSustenido(nota)) {
+    display.drawBitmap(
+      x, y - NOTA_H / 2, bitmapNotaSus, NOTA_W, NOTA_H, WHITE);
+  } 
+  else {
+    display.drawBitmap(
+      x, y - NOTA_H / 2, bitmapNota, NOTA_W,NOTA_H, WHITE );
+  }
+
+  if (nota == NOTE_C4 || nota == NOTE_CS4) {
+    display.drawLine(51, 50, 70, 50, WHITE);
+  }
+  else if (nota == NOTE_A5 || nota == NOTE_AS5 || nota == NOTE_B5) {
+    display.drawLine(90, 14, 110, 14, WHITE);
+  }
+  else if (nota == NOTE_C6) {
+    display.drawLine(90, 14, 110, 14, WHITE);
+    display.drawLine(90, 8, 110, 8, WHITE);
+  }
+}
 
 void drawPentagrama() {
   for (int i = 0; i < 5; i++) {
     int y = STAFF_TOP + i * STAFF_SPACING;
-    display.drawLine(32, y, 90, y, WHITE);
+    display.drawLine(50, y, 110, y, WHITE);
   }
 }
 
+void SelecaoDeNotas() {
+  int contador = 0;
+  while(digitalRead(OK) == LOW){
+    if (digitalRead(UP) == HIGH) {  
+      contador++;
+      if (contador >= TOTAL_NOTAS) contador = TOTAL_NOTAS;
+      delay(200); 
+    }
 
-typedef struct no {
-  int dado;
-  struct no *prox;
-} No;
+    if (digitalRead(DOWN) == HIGH) { 
+      contador--;
+      if (contador < 0) contador = 0;
+      delay(200);
+    }
 
-typedef struct musica{
-  No *inicio;
-  int bpm;
-  int tam;
-} Musica;
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    display.setCursor(0, 0);
+    display.print("Nota: ");
+    display.println(nomeNotas[contador]);
+    drawPentagrama();
+    display.drawBitmap(10, STAFF_TOP - 10, epd_bitmap_clave_pixel, CLAVE_W, CLAVE_H, WHITE);
+    desenharNota(contador, frequencias[contador]);
+    tone(BUZZER, frequencias[contador], 1000);
 
-void CriarMusica(Musica *mu);
-void drawPentagrama();
-
-void setup() {
-  pinMode(UP, INPUT_PULLUP);
-  pinMode(DOWN, INPUT_PULLUP);
-  pinMode(OK, INPUT_PULLUP);
-  pinMode(BACK, INPUT_PULLUP);
-  pinMode(BUZZER, OUTPUT);
-
-  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
-  display.clearDisplay();
+    display.display();
+  }
 }
 
 void CriarMusica(Musica *mu) {
@@ -143,10 +320,24 @@ void CriarMusica(Musica *mu) {
 
   mu->bpm = (contador * 10) + 60;
 }
+// ===================== SETUP / LOOP =====================
 
-void loop(){
+void setup() {
+  pinMode(UP, INPUT_PULLUP);
+  pinMode(DOWN, INPUT_PULLUP);
+  pinMode(OK, INPUT_PULLUP);
+  pinMode(BACK, INPUT_PULLUP);
+  pinMode(BUZZER, OUTPUT);
 
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  display.clearDisplay();
+  SelecaoDeNotas();
+}
+
+
+void loop() {
   Musica mu;
   CriarMusica(&mu);
-  
- }
+
+}
+
