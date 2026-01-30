@@ -280,7 +280,7 @@ void CriarMusica(Musica *mu) {
           display.setTextSize(1);
           display.setTextColor(WHITE);
           display.setCursor(0, 0);
-          display.println("O bpm deve estar entre 20 e 200");
+          display.print(F("O bpm deve estar entre 20-200"));
           display.display();
           tone(BUZZER, NOTE_F5);
           delay(2000); 
@@ -297,8 +297,7 @@ void CriarMusica(Musica *mu) {
           display.setTextSize(1);
           display.setTextColor(WHITE);
           display.setCursor(0, 0);
-          display.println("O bpm deve estar entre 20 e 200");
-          drawPentagrama();
+          display.print(F("O bpm deve estar entre 20-200"));
           display.display();
           tone(BUZZER, NOTE_C4);
           delay(2000);
@@ -340,4 +339,3 @@ void loop() {
   CriarMusica(&mu);
 
 }
-
