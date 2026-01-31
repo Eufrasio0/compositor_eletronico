@@ -1,0 +1,162 @@
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+typedef struct nota{
+  int nota;
+  int tempo;
+} Nota;
+
+typedef struct no {
+  Nota notaMus;
+  struct no *prox;
+} No;
+
+typedef struct musica{
+  No *inicio;
+  int bpm;
+  int tam;
+} Musica;
+
+//============= prototipos ==============
+
+void CriarMusica(Musica *mu);
+// ===================== DEFINES DE NOTAS =====================
+
+// 4ª oitava
+#define NOTE_C4   262
+#define NOTE_CS4  277
+#define NOTE_D4   294
+#define NOTE_DS4  311
+#define NOTE_E4   330
+#define NOTE_F4   349
+#define NOTE_FS4  370
+#define NOTE_G4   392
+#define NOTE_GS4  415
+#define NOTE_A4   440
+#define NOTE_AS4  466
+#define NOTE_B4   494
+// 5ª oitava
+#define NOTE_C5   523
+#define NOTE_CS5  554
+#define NOTE_D5   587
+#define NOTE_DS5  622
+#define NOTE_E5   659
+#define NOTE_F5   698
+#define NOTE_FS5  740
+#define NOTE_G5   784
+#define NOTE_GS5  831
+#define NOTE_A5   880
+#define NOTE_AS5  932
+#define NOTE_B5   988
+// 6ª oitava
+#define NOTE_C6   1047
+
+#define REST 0
+
+// ===================== PINOS =====================
+
+#define UP     D6
+#define DOWN   D7
+#define OK     D8
+#define BACK   D3
+#define BUZZER D5
+
+
+// ===================== ARRAYS =====================
+
+int frequencias[] = {
+  NOTE_C4, NOTE_CS4, NOTE_D4, NOTE_DS4, NOTE_E4, NOTE_F4,
+  NOTE_FS4, NOTE_G4, NOTE_GS4, NOTE_A4, NOTE_AS4, NOTE_B4,
+  NOTE_C5, NOTE_CS5, NOTE_D5, NOTE_DS5, NOTE_E5, NOTE_F5,
+  NOTE_FS5, NOTE_G5, NOTE_GS5, NOTE_A5, NOTE_AS5, NOTE_B5,
+  NOTE_C6
+};
+
+const char *nomeNotas[] = {
+  "NOTE_C4","NOTE_CS4","NOTE_D4","NOTE_DS4","NOTE_E4","NOTE_F4",
+  "NOTE_FS4","NOTE_G4","NOTE_GS4","NOTE_A4","NOTE_AS4","NOTE_B4",
+  "NOTE_C5","NOTE_CS5","NOTE_D5","NOTE_DS5","NOTE_E5","NOTE_F5",
+  "NOTE_FS5","NOTE_G5","NOTE_GS5","NOTE_A5","NOTE_AS5","NOTE_B5",
+  "NOTE_C6"
+};
+
+inline int listaVazia(ListaAluno *mu) {
+    return (mu->inicio == NULL);
+  }
+
+int InserirNota(ListaAluno *mu, Nota note){
+    No *novo = (No *) malloc(sizeof(No));
+    novo->notaMus = note;
+    novo->prox = NULL;
+    if (listaVazia(mu)){
+        mu->inicio = novo;
+        mu->tam++;
+        return 1;
+    }
+    No *aux = mu->inicio;
+    while(aux->prox!=NULL){
+        aux=aux->prox;
+    }
+    aux->prox = novo;
+    mu->tam++;
+    return 1;
+  }
+
+int SelecionarNota(){
+  int contador = 0;
+  while(digitalRead(OK == LOW)){
+    if(digitalRead(UP) == HIGH){
+      contador++;
+      if(contador > 25){
+        contador = 25;
+      }
+    }
+    else if(digitalRead(DOWN) == HIGH){
+      contador--:
+      if(contador < 0){
+        contador = 0;
+      }
+    }
+  }
+  return frequencias[contador];
+}
+
+int SelecionarBpm(){
+  int contador = 0;
+  while(digitalRead(OK == LOW)){
+    if(digitalRead(UP) == HIGH){
+      contador++;
+      if(contador > 200){
+        contador = 14;
+      }
+    }
+    else if(digitalRead(DOWN) == HIGH){
+      contador--:
+      if(contador < -4){
+        contador = 0;
+      }
+    }
+  }
+  return (contador * 10) + 60;
+}
+
+// ===================== SETUP / LOOP =====================
+
+void setup() {
+  pinMode(UP, INPUT_PULLUP);
+  pinMode(DOWN, INPUT_PULLUP);
+  pinMode(OK, INPUT_PULLUP);
+  pinMode(BACK, INPUT_PULLUP);
+  pinMode(BUZZER, OUTPUT);
+
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  display.clearDisplay();
+}
+
+
+void loop() {
+  Musica mu;
+  CriarMusica(&mu);
+
+}
