@@ -18,16 +18,6 @@ typedef struct musica{
   int tam;
 } Musica;
 
-enum EstadoSistema {
-  MENU_INICIAL,
-  CRIAR_MUSICA,
-  BIBLIOTECA
-};
-
-EstadoSistema estadoAtual = MENU_INICIAL;
-int8_t opcaoMenu = 0;  // 0 ou 1
-
-
 //============= prototipos ==============
 
 void desenharNota(int cont, int nota);
@@ -322,7 +312,83 @@ void liberarLista(Musica*l) {
     l->inicio = NULL;
     l->tam = 0;
 }
+int SelecaoDeNotas() {
+  int contador = 0;
+  while(digitalRead(OK) == LOW){
+    if (digitalRead(UP) == HIGH) {  
+      contador++;
+      if (contador >= TOTAL_NOTAS) contador = TOTAL_NOTAS;
+      delay(200); 
+    }
 
+    if (digitalRead(DOWN) == HIGH) { 
+      contador--;
+      if (contador < 0) contador = 0;
+      delay(200);
+    }
+
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    display.setCursor(0, 0);
+    display.print("Nota: ");
+    display.println(nomeNotas[contador]);
+    drawPentagrama();
+    display.drawBitmap(10, STAFF_TOP - 10, epd_bitmap_clave_pixel, CLAVE_W, CLAVE_H, WHITE);
+    desenharNota(contador, frequencias[contador]);
+    tone(BUZZER, frequencias[contador], 1000);
+
+    display.display();
+  }
+  return frequencias[contador];
+}
 bool listaVazia(Musica *mu) {
   return mu->inicio == NULL;
 }
+
+int SelecionarTempo() {
+  int contador = 0;
+
+  while (digitalRead(OK) == LOW) {
+
+    if (digitalRead(UP) == HIGH) {
+      contador++;
+      if (contador > 8) {
+        contador = 8;
+        display.clearDisplay();
+        display.setTextSize(1);
+        display.setTextColor(WHITE);
+        display.setCursor(0, 0);
+        display.print(F("MAX: COLCHEIA"));
+        display.display();
+        delay(800);
+      }
+      delay(200); // debounce
+    }
+
+    else if (digitalRead(DOWN) == HIGH) {
+      contador--;
+      if (contador < -8) {
+        contador = -8;
+        display.clearDisplay();
+        display.setTextSize(1);
+        display.setTextColor(WHITE);
+        display.setCursor(0, 0);
+        display.print(F("MAX: COLCHEIA PONT."));
+        display.display();
+        delay(800);
+      }
+      delay(200);
+    }
+
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.print(F("Tempo: "));
+    display.println(contador);
+    display.display();
+  }
+
+  delay(300); 
+  return contador;
+}
+
