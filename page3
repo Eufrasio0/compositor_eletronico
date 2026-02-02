@@ -1,0 +1,635 @@
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <SPI.h>
+#include <SD.h>
+
+typedef struct nota{
+  int nota;
+  int tempo;
+} Nota;
+
+typedef struct no {
+  Nota notaMus;
+  struct no *prox;
+} No;
+
+typedef struct musica{
+  No *inicio;
+  int bpm;
+  int tam;
+} Musica;
+
+//============= prototipos ==============
+
+void desenharNota(int cont, int nota);
+int notaParaY(int nota);
+void drawPentagrama();
+void CriarMusica(Musica *mu);
+bool listaVazia(Musica *mu);
+void MenuPrincipal(Musica *mu);
+void SubMenuMusica(Musica *mu);
+void InserirNota(Musica *mu);
+int SelecionarTempo();
+int SelecaoDeNotas();
+int* CriarArray(Musica *mu);
+// ===================== DEFINES DE NOTAS =====================
+
+// 4ª oitava
+#define NOTE_C4   262
+#define NOTE_CS4  277
+#define NOTE_D4   294
+#define NOTE_DS4  311
+#define NOTE_E4   330
+#define NOTE_F4   349
+#define NOTE_FS4  370
+#define NOTE_G4   392
+#define NOTE_GS4  415
+#define NOTE_A4   440
+#define NOTE_AS4  466
+#define NOTE_B4   494
+#define NOTE_C5   523
+#define NOTE_CS5  554
+#define NOTE_D5   587
+#define NOTE_DS5  622
+#define NOTE_E5   659
+#define NOTE_F5   698
+#define NOTE_FS5  740
+#define NOTE_G5   784
+#define NOTE_GS5  831
+#define NOTE_A5   880
+#define NOTE_AS5  932
+#define NOTE_B5   988
+#define NOTE_C6   1047
+#define REST 0
+
+// ===================== PINOS =====================
+
+
+#define UP     D6   // GPIO12
+#define DOWN   D7   // GPIO13
+#define OK     D5   // GPIO14
+#define BACK   D8   // GPIO15
+#define BUZZER D3   // GPIO0 (saída ok)
+#define SD_CS  D0   // GPIO16
+
+// ===================== PARTITURA =====================
+
+#define STAFF_TOP 20
+#define STAFF_SPACING 6
+#define NOTE_STEP (STAFF_SPACING / 2)
+#define NOTA_CENTRO_Y 6 
+
+// ===================== DISPLAY =====================
+
+Adafruit_SSD1306 display(128, 64, &Wire, -1);
+
+// ===================== ARRAYS =====================
+
+int frequencias[] = {
+  NOTE_C4, NOTE_CS4, NOTE_D4, NOTE_DS4, NOTE_E4, NOTE_F4,
+  NOTE_FS4, NOTE_G4, NOTE_GS4, NOTE_A4, NOTE_AS4, NOTE_B4,
+  NOTE_C5, NOTE_CS5, NOTE_D5, NOTE_DS5, NOTE_E5, NOTE_F5,
+  NOTE_FS5, NOTE_G5, NOTE_GS5, NOTE_A5, NOTE_AS5, NOTE_B5,
+  NOTE_C6
+};
+
+const char *nomeNotas[] = {
+  "NOTE_C4","NOTE_CS4","NOTE_D4","NOTE_DS4","NOTE_E4","NOTE_F4",
+  "NOTE_FS4","NOTE_G4","NOTE_GS4","NOTE_A4","NOTE_AS4","NOTE_B4",
+  "NOTE_C5","NOTE_CS5","NOTE_D5","NOTE_DS5","NOTE_E5","NOTE_F5",
+  "NOTE_FS5","NOTE_G5","NOTE_GS5","NOTE_A5","NOTE_AS5","NOTE_B5",
+  "NOTE_C6"
+};
+
+#define TOTAL_NOTAS (sizeof(frequencias) / sizeof(int))
+
+// ===================== BITMAP DA NOTA =====================
+
+#define NOTA_W 8
+#define NOTA_H 8
+
+const uint8_t bitmapNota[] PROGMEM = {
+  0b00000000,
+  0b00000000,
+  0b01111000,
+  0b11111100,
+  0b11111100,
+  0b01111000,
+  0b00000000,
+  0b00000000,
+};
+
+const uint8_t bitmapNotaSus[] PROGMEM = {
+  0b00000000,
+  0b00000000,
+  0b01111000,
+  0b11111100,
+  0b11111100,
+  0b01111001,
+  0b00010110,
+  0b00100100,
+};
+
+#define CLAVE_W 24
+#define CLAVE_H 44
+
+const unsigned char epd_bitmap_clave_pixel [] PROGMEM = {
+  0x00, 0x03, 0x00, 0x00, 0x07, 0x80, 0x00, 0x07, 0x80, 0x00, 0x0F, 0x80,
+  0x00, 0x0F, 0xC0, 0x00, 0x1C, 0xC0, 0x00, 0x1C, 0xC0, 0x00, 0x18, 0xC0,
+  0x00, 0x18, 0xC0, 0x00, 0x19, 0xC0, 0x00, 0x13, 0x80, 0x00, 0x07, 0x80,
+  0x00, 0x0F, 0x80, 0x00, 0x1F, 0x00, 0x00, 0x3F, 0x00, 0x00, 0x7E, 0x00,
+  0x00, 0xFC, 0x00, 0x01, 0xF8, 0x00, 0x03, 0xF8, 0x00, 0x03, 0xCC, 0x00,
+  0x07, 0x8E, 0x00, 0x07, 0x1F, 0x80, 0x0F, 0x3F, 0xC0, 0x0E, 0x7F, 0xE0,
+  0x0E, 0x7F, 0xE0, 0x0E, 0x7E, 0xF0, 0x06, 0x76, 0x70, 0x06, 0x76, 0x70,
+  0x06, 0x76, 0x70, 0x03, 0x36, 0xE0, 0x03, 0x87, 0xE0, 0x01, 0xC7, 0xC0,
+  0x00, 0x7F, 0x00, 0x00, 0x07, 0x00, 0x00, 0x03, 0x00, 0x00, 0x03, 0x00,
+  0x00, 0x03, 0xF3, 0x00, 0x01, 0xF9, 0x00, 0x01, 0xF9, 0x00, 0x01, 0xFF,
+  0x00, 0x01, 0xFF, 0x00, 0x00, 0xFE, 0x00, 0x00, 0x7C, 0x00, 0x00, 0x00,
+  0x00
+};
+
+//====================== FUNÇÕES DE NAVEGAÇÃO ============================
+
+void MenuPrincipal(Musica *mu) {
+  int opcao = 0;
+
+  while (digitalRead(OK) == LOW) {
+
+    if (digitalRead(UP) == LOW) {
+      opcao = 0;
+      delay(200);
+    }
+    else if (digitalRead(DOWN) == LOW) {
+      opcao = 1;
+      delay(200);
+    }
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    display.setCursor(0, 0);
+
+    display.println(F("======= MENU ======="));
+    display.println();
+
+    display.print(opcao == 0 ? "> " : "  ");
+    display.println(F("Criar musica"));
+
+    display.print(opcao == 1 ? "> " : "  ");
+    display.println(F("Biblioteca"));
+
+    display.display();
+    delay(1);
+  }
+  delay(300);
+
+  if(opcao == 0){
+    CriarMusica(mu);
+  }
+}
+
+
+void SubMenuMusica(Musica *mu) {
+  int opcao = 0;
+
+  while (digitalRead(OK) == LOW) {
+
+    if (digitalRead(UP) == LOW) {
+      opcao = 0;
+      delay(200);
+    }
+    else if (digitalRead(DOWN) == LOW) {
+      opcao = 1;
+      delay(200);
+    }
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    display.setCursor(0, 0);
+
+    display.println(F("====== SUBMENU ======"));
+    display.println();
+
+    display.print(opcao == 0 ? "> " : "  ");
+    display.println(F("Adicionar Nota"));
+
+    display.print(opcao == 1 ? "> " : "  ");
+    display.println(F("Finalizar Musica"));
+
+    display.display();
+    delay(1);
+  }
+  delay(300);
+
+  if(opcao == 0){
+    InserirNota(mu);
+  }
+
+  if(opcao == 1){
+    int* Array;
+    Array = CriarArray(mu);
+    if(!criarArquivoMusica(Array, mu->tam)){
+      display.clearDisplay();
+      display.setTextSize(1);
+      display.setTextColor(WHITE);
+      display.setCursor(10, 28);
+      display.print("ERRO AO CRIAR");
+      display.display();
+      delay(1000);
+      SubMenuMusica(mu);
+
+    }
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    display.setCursor(10, 28);
+    display.println(F("MUSICA ADICIONADA"));
+    display.display();
+    delay(2000);
+    liberarLista(mu);
+    free(Array);
+    MenuPrincipal(mu);
+  }
+}
+
+//================= FUNÇÕES DE ESCRITA =====================
+
+void CriarMusica(Musica *mu) {
+  mu->inicio = NULL;
+  mu->tam = 0;
+
+  int contador = 0; 
+
+  delay(200);
+
+  while (digitalRead(OK) == LOW) {
+
+    if (digitalRead(UP) == HIGH) {
+      contador++;
+      if (contador > 14) {
+        contador = 14;
+          display.clearDisplay();
+          display.setTextSize(1);
+          display.setTextColor(WHITE);
+          display.setCursor(0, 0);
+          display.print(F("O bpm deve estar entre 20-200"));
+          display.display();
+          tone(BUZZER, NOTE_C4);
+          delay(1000); 
+          noTone(BUZZER);
+      }
+      delay(200);
+    }
+
+    if (digitalRead(DOWN) == HIGH) {
+      contador--;
+      if (contador < -4){
+         contador = -4; 
+          display.clearDisplay();
+          display.setTextSize(1);
+          display.setTextColor(WHITE);
+          display.setCursor(0, 0);
+          display.print(F("O bpm deve estar entre 20-200"));
+          display.display();
+          tone(BUZZER, NOTE_C4);
+          delay(1000);
+          noTone(BUZZER);
+          
+      }
+      delay(200);
+    }
+
+    int bpmAtual = (contador * 10) + 60;
+
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.print("BPM base: ");
+    display.println(bpmAtual);
+    display.drawBitmap(50, STAFF_TOP - 7, epd_bitmap_clave_pixel, CLAVE_W, CLAVE_H, WHITE);
+    display.display();
+    delay(1);
+  }
+  delay(200);
+  mu->bpm = (contador * 10) + 60;
+  SubMenuMusica(mu);
+}
+
+void InserirNota(Musica *mu){
+  No *novo = (No *) malloc(sizeof(No));
+  novo->notaMus.nota = SelecaoDeNotas();
+  novo->notaMus.tempo = SelecionarTempo();
+  novo->prox = NULL;
+  if (listaVazia(mu)){
+      mu->inicio = novo;
+      mu->tam++;
+      SubMenuMusica(mu);
+  }
+  No *aux = mu->inicio;
+  while(aux->prox!=NULL){
+      aux=aux->prox;
+  }
+  aux->prox = novo;
+  mu->tam++;
+  SubMenuMusica(mu);
+}
+
+void liberarLista(Musica*l) {
+    No *aux = l->inicio;
+    while(aux != NULL) {
+        No *temp = aux->prox;
+        free(aux);
+        aux = temp;
+    }
+    l->inicio = NULL;
+    l->tam = 0;
+}
+
+int SelecaoDeNotas() {
+  int contador = 0;
+  delay(300);
+
+  while(digitalRead(OK) == LOW){
+    if (digitalRead(UP) == HIGH) {  
+      contador++;
+      if (contador >= TOTAL_NOTAS) contador = TOTAL_NOTAS;
+      delay(200); 
+    }
+
+    if (digitalRead(DOWN) == HIGH) { 
+      contador--;
+      if (contador < 0) contador = 0;
+      delay(200);
+    }
+
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    display.setCursor(0, 0);
+    display.print("Nota: ");
+    display.println(nomeNotas[contador]);
+    drawPentagrama();
+    display.drawBitmap(10, STAFF_TOP - 10, epd_bitmap_clave_pixel, CLAVE_W, CLAVE_H, WHITE);
+    desenharNota(contador, frequencias[contador]);
+    tone(BUZZER, frequencias[contador], 1000);
+
+    display.display();
+  }
+  return frequencias[contador];
+}
+
+bool listaVazia(Musica *mu) {
+  return mu->inicio == NULL;
+}
+
+int SelecionarTempo() {
+  int contador = 0;
+
+  delay(300);
+  while (digitalRead(OK) == LOW){
+    if (digitalRead(UP) ==LOW){
+      contador++;
+      if (contador > 8) {
+        contador = 8;
+        display.clearDisplay();
+        display.setTextSize(1);
+        display.setTextColor(WHITE);
+        display.setCursor(0, 0);
+        display.print(F("MAX: COLCHEIA"));
+        display.display();
+        delay(800);
+      }
+      delay(200); // debounce
+    }
+
+    else if (digitalRead(DOWN) == LOW) {
+      contador--;
+      if (contador < -8) {
+        contador = -8;
+        display.clearDisplay();
+        display.setTextSize(1);
+        display.setTextColor(WHITE);
+        display.setCursor(0, 0);
+        display.print(F("MAX: COLCHEIA PONT."));
+        display.display();
+        delay(800);
+      }
+      delay(200);
+    }
+
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    display.setCursor(0, 0);
+    display.print("Tempos: ");
+    display.println(contador);
+    display.display();
+  }
+
+  delay(300); 
+  return contador;
+}
+
+//================ CARREGAR ARRAY ===============================
+
+
+int* CriarArray(Musica *mu) {
+  int totalInts = 1 + (mu->tam * 2);
+  int* Array = (int*) malloc(totalInts * sizeof(int));
+
+  if (!Array) return NULL;
+
+  Array[0] = mu->bpm;
+
+  No *aux = mu->inicio;
+  int cont = 1;
+
+  while (aux != NULL) {
+    Array[cont++] = aux->notaMus.nota;
+    Array[cont++] = aux->notaMus.tempo;
+    aux = aux->prox;
+  }
+  return Array;
+}
+
+
+//================== FUNÇÕES DO SD CARD =========================
+
+bool iniciarSD() {
+  if (!SD.begin(SD_CS)) {
+    return false;
+  }
+  return true;
+}
+
+bool criarArquivoMusica(int* array, int tamanho) {
+  if (array == NULL || tamanho < 1) return false;
+
+  int cont = contarArquivosTXT();
+  int indice = cont + 1;
+
+  char nomeArquivo[20];
+  snprintf(nomeArquivo, sizeof(nomeArquivo), "/musica%d.txt", indice);
+
+  // segurança: evita sobrescrever
+  if (SD.exists(nomeArquivo)) return false;
+
+  File f = SD.open(nomeArquivo, FILE_WRITE);
+  if (!f) return false;
+
+  // Primeira linha: primeiro dado do array
+  f.println(array[0]);
+
+  // Demais linhas: pares de dados
+  for (int i = 1; i + 1 < tamanho; i += 2) {
+    f.print(array[i]);
+    f.print(",");
+    f.println(array[i + 1]);
+    yield();
+    
+  }
+
+  f.close();
+  return true;
+}
+
+int contarArquivosTXT() {
+  int contador = 0;
+
+  File root = SD.open("/");
+  if (!root) return 0;
+
+  while (true) {
+    File entry = root.openNextFile();
+    if (!entry) break;
+
+    if (!entry.isDirectory()) {
+      const char* nome = entry.name();
+      int len = strlen(nome);
+
+      // verifica se termina com ".txt"
+      if (len > 4 &&
+          nome[len - 4] == '.' &&
+          nome[len - 3] == 't' &&
+          nome[len - 2] == 'x' &&
+          nome[len - 1] == 't') {
+        contador++;
+      }
+    }
+    entry.close();
+    yield();
+  }
+  root.close();
+  return contador;
+}
+
+
+//======================== FUNÇÕES VISUAIS ===========================
+
+void drawPentagrama() {
+  for (int i = 0; i < 5; i++) {
+    int y = STAFF_TOP + i * STAFF_SPACING;
+    display.drawLine(50, y, 110, y, WHITE);
+  }
+}
+
+bool ehSustenido(int nota) {
+  return (
+    nota == NOTE_CS4 || nota == NOTE_DS4 ||
+    nota == NOTE_FS4 || nota == NOTE_GS4 || nota == NOTE_AS4 ||
+    nota == NOTE_CS5 || nota == NOTE_DS5 ||
+    nota == NOTE_FS5 || nota == NOTE_GS5 || nota == NOTE_AS5
+  );
+}
+
+void desenharNota(int cont, int nota) {
+  int x = (cont * 2) + 55;
+  int y = notaParaY(nota);
+
+  if (ehSustenido(nota)) {
+    display.drawBitmap(
+      x, y - NOTA_H / 2, bitmapNotaSus, NOTA_W, NOTA_H, WHITE);
+  } 
+  else {
+    display.drawBitmap(
+      x, y - NOTA_H / 2, bitmapNota, NOTA_W,NOTA_H, WHITE );
+  }
+
+  if (nota == NOTE_C4 || nota == NOTE_CS4) {
+    display.drawLine(51, 50, 70, 50, WHITE);
+  }
+  else if (nota == NOTE_A5 || nota == NOTE_AS5 || nota == NOTE_B5) {
+    display.drawLine(90, 14, 110, 14, WHITE);
+  }
+  else if (nota == NOTE_C6) {
+    display.drawLine(90, 14, 110, 14, WHITE);
+    display.drawLine(90, 8, 110, 8, WHITE);
+  }
+}
+
+int notaParaY(int nota) {
+  int baseY = STAFF_TOP + STAFF_SPACING * 4;
+
+  switch (nota) {
+        // 4ª oitava
+    case NOTE_C4:  return 50;
+    case NOTE_CS4: return 50;
+    case NOTE_D4:  return 47;
+    case NOTE_DS4: return 47;
+    case NOTE_E4:  return 44;
+    case NOTE_F4:  return 41;
+    case NOTE_FS4: return 41;
+    case NOTE_G4:  return 38;
+    case NOTE_GS4: return 38;
+    case NOTE_A4:  return 35;
+    case NOTE_AS4: return 35;
+    case NOTE_B4:  return 32;
+    // 5ª oitava
+    case NOTE_C5:  return 29;
+    case NOTE_CS5: return 29;
+    case NOTE_D5:  return 26;
+    case NOTE_DS5: return 26;
+    case NOTE_E5:  return 23;
+    case NOTE_F5:  return 20;
+    case NOTE_FS5: return 20;
+    case NOTE_G5:  return 17;
+    case NOTE_GS5: return 17;
+    case NOTE_A5:  return 14;
+    case NOTE_AS5: return 14;
+    case NOTE_B5:  return 11;
+    // 6ª oitava
+    case NOTE_C6:  return 8;
+  }
+  return baseY;
+}
+
+
+
+// ===================== SETUP / LOOP =====================
+
+void setup() {
+  pinMode(UP, INPUT_PULLUP);
+  pinMode(DOWN, INPUT_PULLUP);
+  pinMode(OK, INPUT_PULLUP);
+  pinMode(BACK, INPUT_PULLUP);
+  pinMode(BUZZER, OUTPUT);
+  iniciarSD();
+  Wire.begin(D2, D1); 
+
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  display.clearDisplay();
+}
+
+
+void loop() {
+  Musica mu;
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.setCursor(0,0);
+  display.println("OLED OK");
+  display.display();
+  delay(1000);
+
+  MenuPrincipal(&mu);
+  
+}
